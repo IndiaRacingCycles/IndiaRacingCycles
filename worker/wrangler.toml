@@ -2,12 +2,12 @@ name = "india-racing-cycles-api"
 main = "src/index.js"
 compatibility_date = "2026-11-04"
 
-# Create a Cloudflare D1 database and replace the placeholder below before deploying.
+# Cloudflare D1 database
 [[d1_databases]]
 binding = "DB"
 database_name = "india-racing-cycles"
-database_id = "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID"
+database_id = "455d9c89-87f6-43a5-9e1b-cdc0777a5e4d"
 
 [vars]
-# Set this to the exact GitHub Pages origin, not a wildcard.
+# Exact GitHub Pages origin
 SITE_URL = "https://indiaracingcycles.github.io"
