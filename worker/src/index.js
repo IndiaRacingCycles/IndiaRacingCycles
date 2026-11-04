@@ -36,7 +36,11 @@ async function sendEmail(env, to, subject, html, textBody) {
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ from: env.FROM_EMAIL, to: [to], subject, html, text: textBody })
   });
-  if (!response.ok) throw new Error(`Email provider returned ${response.status}.`);
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    console.error("Resend API error:", response.status, details.slice(0, 1000));
+    throw new Error(`Email provider returned ${response.status}.`);
+  }
   return response.json();
 }
 async function limitSignup(request, env, purpose = "signup") {
@@ -378,7 +382,10 @@ async function handle(request, env) {
   }
   if (url.pathname === "/api/subscribe" && request.method === "POST") {
     try { return await handleSubscribe(request, env); }
-    catch (e) { return json({ error: "Subscription could not be processed. Please try again later." }, 502); }
+    catch (e) {
+      console.error("Newsletter subscription failed:", e);
+      return json({ error: "Subscription could not be processed. Please try again later." }, 502);
+    }
   }
   if (url.pathname === "/api/confirm" && request.method === "GET") {
     try { return await handleConfirm(url, env); }
