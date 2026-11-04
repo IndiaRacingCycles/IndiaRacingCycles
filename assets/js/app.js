@@ -70,10 +70,21 @@
         msg.className="form-message form-message-dark error";
         return;
       }
+      // Trim both optional URL fields before checking or sending them.
+      // Blank fields are valid and are sent as empty strings.
       for(const key of ["source_url","poster_url"]){
-        if(String(data[key]||"").trim()){
-          try{const u=new URL(data[key]);if(!["https:","http:"].includes(u.protocol))throw new Error();}
-          catch{msg.textContent="Please enter a valid public web link for the event or poster.";msg.className="form-message form-message-dark error";return;}
+        data[key] = String(data[key] ?? "").trim();
+        if(!data[key]) continue;
+        try{
+          const parsed = new URL(data[key]);
+          if(!["https:","http:"].includes(parsed.protocol)) throw new Error("Unsupported link type");
+        }catch{
+          const fieldLabel = key === "source_url" ? "Event or social media link" : "Poster or image link";
+          msg.textContent = fieldLabel + " is not a valid web address. Please clear that field or enter a full link beginning with https://.";
+          msg.className="form-message form-message-dark error";
+          const field = form.elements.namedItem(key);
+          if(field) field.focus();
+          return;
         }
       }
       if(data.event_date && data.event_date_end && data.event_date_end < data.event_date){
