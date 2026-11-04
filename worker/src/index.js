@@ -62,17 +62,23 @@ async function handleSubscribe(request, env) {
   const email = String(body.email || "").trim().toLowerCase();
   if (!validEmail(email)) return json({ error: "Please enter a valid email address." }, 400);
 
-  // Prevent repeated confirmation emails to the same address within one hour.
-  const existing = await env.DB.prepare("SELECT status, created_at FROM subscribers WHERE email = ?").bind(email).first();
+  const existing = await env.DB.prepare("SELECT status FROM subscribers WHERE email = ?").bind(email).first();
   if (existing?.status === "active") {
     return json({ ok: true, message: "This address is already subscribed." });
   }
-  const emailWindow = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  if (existing?.status === "pending" && existing.created_at >= emailWindow) {
-    return json({ ok: true, message: "A subscription request for this address was recently received. Please check your inbox or try again in an hour." }, 202);
+
+  // Versioned purpose gives newsletter signups a fresh IP counter after a limit change.
+  if (!await limitSignup(request, env, "newsletter-signup-v2", 50)) {
+    return json({ error: "Too many attempts. Please try again later." }, 429);
   }
 
-  if (!await limitSignup(request, env)) return json({ error: "Too many attempts. Please try again later." }, 429);
+  // Allow one confirmation email per address per hour, but only after a send succeeds.
+  const emailKey = await sha256("email-confirmation:" + email);
+  const emailCutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const emailLimit = await env.DB.prepare("SELECT attempts, window_started_at FROM signup_attempts WHERE key_hash = ?").bind(emailKey).first();
+  if (emailLimit && emailLimit.window_started_at >= emailCutoff && emailLimit.attempts >= 1) {
+    return json({ ok: true, message: "A confirmation email was recently sent to this address. Please check your inbox." }, 202);
+  }
 
   const confirmToken = randomToken();
   const unsubscribeToken = randomToken();
@@ -91,6 +97,7 @@ async function handleSubscribe(request, env) {
   const confirmUrl = `${env.WORKER_URL || new URL(request.url).origin}/api/confirm?token=${confirmToken}`;
   const html = `<div style="font:16px/1.6 Arial,sans-serif;color:#202124"><h2>Confirm your India Racing Cycles subscription</h2><p>Click the link below to confirm that you want to receive cycling event announcements and important updates.</p><p><a href="${confirmUrl}">Confirm my subscription</a></p><p>If you did not request this, ignore this email. No subscription will be activated.</p></div>`;
   await sendEmail(env, email, "Confirm your India Racing Cycles subscription", html, `Confirm your subscription: ${confirmUrl}\nIf you did not request this, ignore this email.`);
+  await env.DB.prepare("INSERT INTO signup_attempts (key_hash, attempts, window_started_at) VALUES (?, 1, ?) ON CONFLICT(key_hash) DO UPDATE SET attempts=1, window_started_at=excluded.window_started_at").bind(emailKey, nowIso()).run();
   return json({ ok: true, message: "Confirmation email sent. Your subscription is pending until confirmed." }, 202);
 }
 async function handleConfirm(url, env) {
