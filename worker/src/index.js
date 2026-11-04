@@ -3,7 +3,7 @@ const json = (data, status = 200, headers = {}) =>
 
 function cors(request, env) {
   const origin = request.headers.get("Origin") || "";
-  const allowed = env.SITE_URL || "https://learndhairyash.github.io";
+  const allowed = env.SITE_URL || "https://indiaracingcycles.github.io";
   const allowOrigin = origin === allowed ? origin : allowed;
   return {
     "Access-Control-Allow-Origin": allowOrigin,
@@ -27,7 +27,7 @@ function validEmail(email) {
   return typeof email === "string" && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 function htmlPage(title, message) {
-  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title><body style="font:16px/1.6 Roboto,Arial,sans-serif;background:#f5f4fa;color:#1b1b24;padding:40px 18px"><main style="max-width:560px;margin:8vh auto;background:white;border-radius:24px;padding:32px;box-shadow:0 10px 35px #0001"><h1>${title}</h1><p>${message}</p><a href="${"https://learndhairyash.github.io/india-racing-cycles/"}">Return to India Racing Cycles</a></main></body></html>`, { headers: { "content-type": "text/html; charset=utf-8" } });
+  return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title><body style="font:16px/1.6 Roboto,Arial,sans-serif;background:#f5f4fa;color:#1b1b24;padding:40px 18px"><main style="max-width:560px;margin:8vh auto;background:white;border-radius:24px;padding:32px;box-shadow:0 10px 35px #0001"><h1>${title}</h1><p>${message}</p><a href="${"https://indiaracingcycles.github.io/IndiaRacingCycles/"}">Return to India Racing Cycles</a></main></body></html>`, { headers: { "content-type": "text/html; charset=utf-8" } });
 }
 async function sendEmail(env, to, subject, html, textBody) {
   if (!env.RESEND_API_KEY || !env.FROM_EMAIL) throw new Error("Email service is not configured.");
