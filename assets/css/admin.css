@@ -79,3 +79,10 @@
 .admin-footer a{color:var(--primary-dark);font-weight:700;text-decoration:none}
 [hidden]{display:none!important}
 @media(max-width:720px){.admin-main{width:calc(100% - 24px);margin-top:22px}.admin-welcome,.panel-heading{align-items:flex-start;flex-direction:column}.admin-stats{gap:8px}.admin-stat{padding:13px 10px;grid-template-columns:1fr;gap:5px}.admin-stat>.material-symbols-rounded{grid-row:auto}.admin-stat strong{font-size:1.4rem}.admin-stat small{font-size:.63rem}.admin-detail-grid{grid-template-columns:1fr}.calendar-tools{align-items:stretch;flex-direction:column}.admin-search{max-width:none}.filter-select{width:100%;justify-content:space-between}.filter-select select{flex:1}.admin-footer{width:calc(100% - 24px);flex-direction:column}.suggestion-card,.calendar-card{padding:16px}.event-fields{grid-template-columns:1fr}.event-fields .wide{grid-column:auto}.event-dialog form{padding:18px}.admin-tabs{overflow:auto}.admin-tab{white-space:nowrap;padding-left:12px;padding-right:12px}}
+
+.status-chip.active{background:#dff4e8;color:#175c3c}
+.status-chip.unsubscribed{background:#fce8e6;color:#a12a22}
+.subscriber-card{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:17px 19px;border:1px solid var(--outline);border-radius:16px;background:var(--surface)}
+.subscriber-card strong{display:block;overflow-wrap:anywhere;font-size:.92rem}
+.subscriber-card small{display:block;margin-top:4px;color:var(--muted);font-size:.75rem}
+@media(max-width:520px){.subscriber-card{align-items:flex-start;flex-direction:column;gap:9px}}
