@@ -2,13 +2,13 @@
 
 **DISCOVER | SHARE | RACE**
 
-A Material Design 3-inspired cycling events, archive and news site. This project lives in the `india-racing-cycles/` folder of the existing `learndhairyash.github.io` GitHub Pages repository, so the existing portfolio homepage is not replaced.
+A Material Design 3-inspired cycling events, archive and news site. This repository contains the standalone India Racing Cycles website. It is separate from the personal portfolio repository.
 
 ## Website
 
 Once the existing GitHub Pages site serves the repository's `main` branch, the site path is:
 
-`https://learndhairyash.github.io/india-racing-cycles/`
+`https://indiaracingcycles.github.io/IndiaRacingCycles/`
 
 Pages:
 - `index.html` — upcoming events in a single chronological list (nearest date first)
