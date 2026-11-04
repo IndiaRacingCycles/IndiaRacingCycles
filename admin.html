@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="assets/css/styles.css">
   <link rel="stylesheet" href="assets/css/admin.css">
   <script>window.IRC_CONFIG = { apiBase: "https://india-racing-cycles-api.india-racing-cycles-315595.workers.dev" };</script>
-  <script defer src="assets/js/admin.js?v=admin-dashboard-1"></script>
+  <script defer src="assets/js/admin.js?v=admin-subscribers-1"></script>
 </head>
 <body class="admin-page">
   <a class="skip-link" href="#main">Skip to content</a>
@@ -59,11 +59,13 @@
         <article class="admin-stat"><span class="material-symbols-rounded">inbox</span><strong id="stat-pending">—</strong><small>Pending suggestions</small></article>
         <article class="admin-stat"><span class="material-symbols-rounded">event_available</span><strong id="stat-events">—</strong><small>Visible calendar events</small></article>
         <article class="admin-stat"><span class="material-symbols-rounded">task_alt</span><strong id="stat-reviewed">—</strong><small>Reviewed suggestions</small></article>
+        <article class="admin-stat"><span class="material-symbols-rounded">mail</span><strong id="stat-subscribers">—</strong><small>Saved email addresses</small></article>
       </div>
 
       <div class="admin-tabs" role="tablist" aria-label="Admin sections">
         <button class="admin-tab active" id="tab-suggestions" role="tab" aria-selected="true" aria-controls="suggestions-panel" type="button"><span class="material-symbols-rounded">inbox</span> Suggestions <span class="tab-count" id="tab-pending-count">0</span></button>
         <button class="admin-tab" id="tab-calendar" role="tab" aria-selected="false" aria-controls="calendar-panel" type="button"><span class="material-symbols-rounded">calendar_month</span> Calendar</button>
+        <button class="admin-tab" id="tab-subscribers" role="tab" aria-selected="false" aria-controls="subscribers-panel" type="button"><span class="material-symbols-rounded">mail</span> Subscribers <span class="tab-count" id="tab-subscriber-count">0</span></button>
       </div>
 
       <section id="suggestions-panel" class="admin-panel" role="tabpanel" aria-labelledby="tab-suggestions">
@@ -95,6 +97,22 @@
         <div id="calendar-list" class="admin-list" aria-live="polite"></div>
         <p id="calendar-empty" class="admin-empty" hidden>No calendar events match this view.</p>
         <p class="admin-note"><span class="material-symbols-rounded">info</span> Changes made here are saved in Cloudflare and override the matching published event. Hiding an event keeps a record so it can be restored later.</p>
+      </section>
+      <section id="subscribers-panel" class="admin-panel" role="tabpanel" aria-labelledby="tab-subscribers" hidden>
+        <div class="panel-heading">
+          <div><p class="eyebrow">EMAIL UPDATES</p><h2>Saved email addresses</h2><p>These addresses were submitted with consent. In free collection-only mode, they are not confirmed subscriptions and will not receive emails yet.</p></div>
+          <label class="filter-select">Show
+            <select id="subscriber-filter">
+              <option value="all">All addresses</option>
+              <option value="pending">Waiting list</option>
+              <option value="active">Previously confirmed</option>
+              <option value="unsubscribed">Unsubscribed</option>
+            </select>
+          </label>
+        </div>
+        <div id="subscriber-list" class="admin-list" aria-live="polite"></div>
+        <p id="subscriber-empty" class="admin-empty" hidden>No email addresses in this view.</p>
+        <p class="admin-note"><span class="material-symbols-rounded">info</span> New signups are saved as pending. They will not be included in newsletter sends. When email delivery is available later, people will need to confirm their subscription.</p>
       </section>
       <p id="dashboard-message" class="admin-message" role="status"></p>
     </section>
