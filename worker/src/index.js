@@ -201,8 +201,8 @@ function makeEvent(body, forcedId) {
   const startDate = cleanText(body.start_date || body.event_date, 10);
   const endDate = cleanText(body.end_date || body.event_date_end || startDate, 10);
   if (!title) return { error: "Event name is required." };
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(startDate)) return { error: "A valid event start date is required before publishing." };
-  if (endDate && !/^\\d{4}-\\d{2}-\\d{2}$/.test(endDate)) return { error: "Please enter a valid event end date." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return { error: "A valid event start date is required before publishing." };
+  if (endDate && !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return { error: "Please enter a valid event end date." };
   if (endDate && endDate < startDate) return { error: "The event end date cannot be before its start date." };
 
   const sourceUrl = publicUrl(body.source_url);
@@ -211,7 +211,7 @@ function makeEvent(body, forcedId) {
   if (sourceUrl === null || registrationUrl === null || posterUrl === null) {
     return { error: "Event, registration and poster links must be public http:// or https:// URLs." };
   }
-  const slug = title.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
+  const slug = title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 56) || "cycling-event";
   const id = cleanText(forcedId || body.id, 100) || (slug + "-" + crypto.randomUUID().slice(0, 8));
   const discipline = cleanText(body.discipline || body.category, 80);
@@ -262,9 +262,12 @@ async function handleAdminSuggestions(request, url, env) {
     });
   }
 
-  const approveMatch = url.pathname.match(/^\\/api\\/admin\\/event-suggestions\\/([a-f0-9-]{36})\\/approve$/i);
+  const suggestionPrefix = "/api/admin/event-suggestions/";
+  const suggestionTail = url.pathname.startsWith(suggestionPrefix) ? url.pathname.slice(suggestionPrefix.length) : "";
+  const approveId = suggestionTail.endsWith("/approve") ? suggestionTail.slice(0, -8) : "";
+  const approveMatch = /^[a-f0-9-]{36}$/i.test(approveId);
   if (request.method === "POST" && approveMatch) {
-    const suggestionId = approveMatch[1];
+    const suggestionId = approveId;
     const row = await env.DB.prepare("SELECT * FROM event_suggestions WHERE id=?").bind(suggestionId).first();
     if (!row) return json({ error: "Suggestion not found." }, 404);
     if (row.status === "added") return json({ error: "This suggestion has already been added to the calendar." }, 409);
@@ -286,8 +289,8 @@ async function handleAdminSuggestions(request, url, env) {
   }
 
   if (request.method === "PATCH") {
-    const match = url.pathname.match(/^\\/api\\/admin\\/event-suggestions\\/([a-f0-9-]{36})$/i);
-    if (!match) return json({ error: "Invalid suggestion ID." }, 400);
+    const patchId = suggestionTail;
+    if (!/^[a-f0-9-]{36}$/i.test(patchId)) return json({ error: "Invalid suggestion ID." }, 400);
     const body = await request.json().catch(() => ({}));
     const status = cleanText(body.status, 20);
     if (!["reviewed", "added", "rejected"].includes(status)) {
@@ -296,9 +299,9 @@ async function handleAdminSuggestions(request, url, env) {
     const note = cleanText(body.review_note, 1000);
     const result = await env.DB.prepare(
       "UPDATE event_suggestions SET status=?, updated_at=?, review_note=? WHERE id=?"
-    ).bind(status, nowIso(), note, match[1]).run();
+    ).bind(status, nowIso(), note, patchId).run();
     if (!result.meta?.changes) return json({ error: "Suggestion not found." }, 404);
-    return json({ ok: true, id: match[1], status });
+    return json({ ok: true, id: patchId, status });
   }
   return json({ error: "Method not allowed." }, 405);
 }
