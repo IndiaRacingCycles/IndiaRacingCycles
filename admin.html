@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f3fb">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Admin Dashboard | India Racing Cycles</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,400,0,0" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <link rel="stylesheet" href="assets/css/admin.css">
+  <script>window.IRC_CONFIG = { apiBase: "https://india-racing-cycles-api.india-racing-cycles-315595.workers.dev" };</script>
+  <script defer src="assets/js/admin.js"></script>
+</head>
+<body class="admin-page">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="index.html" aria-label="India Racing Cycles home">
+        <span class="brand-mark" aria-hidden="true"><span class="material-symbols-rounded">pedal_bike</span></span>
+        <span class="brand-copy"><strong>INDIA RACING CYCLES</strong><small>ADMINISTRATION</small></span>
+      </a>
+      <div class="admin-header-actions">
+        <a class="button button-tonal button-small" href="index.html"><span class="material-symbols-rounded">open_in_new</span> View website</a>
+        <button class="icon-button" id="theme-toggle" type="button" aria-label="Switch colour theme"><span class="material-symbols-rounded">dark_mode</span></button>
+        <button class="button button-outline button-small" id="logout-button" type="button" hidden>Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="admin-main">
+    <section id="login-panel" class="login-panel">
+      <div class="login-icon"><span class="material-symbols-rounded">admin_panel_settings</span></div>
+      <p class="eyebrow">PRIVATE AREA</p>
+      <h1>Admin dashboard</h1>
+      <p class="login-copy">Sign in with the administrator token stored in Cloudflare. This page does not save your token in the browser or in GitHub.</p>
+      <form id="login-form" class="admin-form">
+        <label for="admin-token">Administrator token</label>
+        <input id="admin-token" name="token" type="password" autocomplete="off" spellcheck="false" required placeholder="Paste your Cloudflare admin token">
+        <button class="button button-filled" type="submit"><span class="material-symbols-rounded">lock_open</span> Connect securely</button>
+        <p id="login-message" class="admin-message" role="status"></p>
+      </form>
+      <p class="security-hint"><span class="material-symbols-rounded">shield_lock</span> Your token stays in this page's memory only. Signing out clears it.</p>
+    </section>
+
+    <section id="dashboard" hidden>
+      <div class="admin-welcome">
+        <div>
+          <p class="eyebrow"><span class="material-symbols-rounded">dashboard</span> INDIA RACING CYCLES</p>
+          <h1>Race calendar admin</h1>
+          <p>Review community tips and manage the events shown on your public calendar.</p>
+        </div>
+        <button class="button button-outline" id="refresh-button" type="button"><span class="material-symbols-rounded">refresh</span> Refresh data</button>
+      </div>
+
+      <div class="admin-stats">
+        <article class="admin-stat"><span class="material-symbols-rounded">inbox</span><strong id="stat-pending">—</strong><small>Pending suggestions</small></article>
+        <article class="admin-stat"><span class="material-symbols-rounded">event_available</span><strong id="stat-events">—</strong><small>Visible calendar events</small></article>
+        <article class="admin-stat"><span class="material-symbols-rounded">task_alt</span><strong id="stat-reviewed">—</strong><small>Reviewed suggestions</small></article>
+      </div>
+
+      <div class="admin-tabs" role="tablist" aria-label="Admin sections">
+        <button class="admin-tab active" id="tab-suggestions" role="tab" aria-selected="true" aria-controls="suggestions-panel" type="button"><span class="material-symbols-rounded">inbox</span> Suggestions <span class="tab-count" id="tab-pending-count">0</span></button>
+        <button class="admin-tab" id="tab-calendar" role="tab" aria-selected="false" aria-controls="calendar-panel" type="button"><span class="material-symbols-rounded">calendar_month</span> Calendar</button>
+      </div>
+
+      <section id="suggestions-panel" class="admin-panel" role="tabpanel" aria-labelledby="tab-suggestions">
+        <div class="panel-heading">
+          <div><p class="eyebrow">COMMUNITY INBOX</p><h2>Event suggestions</h2><p>Approve only after checking the organiser's source and event details.</p></div>
+          <label class="filter-select">Show
+            <select id="suggestion-filter">
+              <option value="pending">Pending</option>
+              <option value="all">All suggestions</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="added">Added to calendar</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </label>
+        </div>
+        <div id="suggestion-list" class="admin-list" aria-live="polite"></div>
+        <p id="suggestion-empty" class="admin-empty" hidden>No suggestions in this view.</p>
+      </section>
+
+      <section id="calendar-panel" class="admin-panel" role="tabpanel" aria-labelledby="tab-calendar" hidden>
+        <div class="panel-heading">
+          <div><p class="eyebrow">PUBLISHED EVENTS</p><h2>Manage calendar</h2><p>Events from the original website data and admin-managed Cloudflare records appear together here.</p></div>
+          <button class="button button-filled" id="add-event-button" type="button"><span class="material-symbols-rounded">add</span> Add event</button>
+        </div>
+        <div class="calendar-tools">
+          <label class="admin-search"><span class="material-symbols-rounded">search</span><input id="calendar-search" type="search" placeholder="Search event, city or organiser"></label>
+          <label class="show-hidden"><input id="show-hidden" type="checkbox"> Show hidden events</label>
+        </div>
+        <div id="calendar-list" class="admin-list" aria-live="polite"></div>
+        <p id="calendar-empty" class="admin-empty" hidden>No calendar events match this view.</p>
+        <p class="admin-note"><span class="material-symbols-rounded">info</span> Changes made here are saved in Cloudflare and override the matching published event. Hiding an event keeps a record so it can be restored later.</p>
+      </section>
+      <p id="dashboard-message" class="admin-message" role="status"></p>
+    </section>
+  </main>
+
+  <dialog id="event-dialog" class="event-dialog">
+    <form id="event-form" method="dialog">
+      <div class="dialog-heading">
+        <div><p class="eyebrow">EVENT DETAILS</p><h2 id="event-dialog-title">Add calendar event</h2></div>
+        <button class="icon-button" id="close-dialog" type="button" aria-label="Close"><span class="material-symbols-rounded">close</span></button>
+      </div>
+      <input type="hidden" name="id" id="event-id">
+      <input type="hidden" name="suggestion_id" id="suggestion-id">
+      <div class="event-fields">
+        <label class="wide">Event name <input name="title" id="event-title" required maxlength="180" placeholder="e.g. Mumbai Road Race"></label>
+        <label>Start date <input name="start_date" id="event-start" type="date" required></label>
+        <label>End date <input name="end_date" id="event-end" type="date"></label>
+        <label class="wide">Location <input name="location" id="event-location" maxlength="220" placeholder="City, state or route"></label>
+        <label>State <input name="state" id="event-state" maxlength="100" placeholder="e.g. Maharashtra"></label>
+        <label>Discipline
+          <select name="discipline" id="event-discipline">
+            <option value="">Select category</option><option>Road</option><option>MTB</option><option>Track</option><option>Time Trial</option><option>Gran Fondo</option><option>Ultra-cycling</option><option>Cyclocross</option><option>Cyclothon</option><option>Other</option>
+          </select>
+        </label>
+        <label class="wide">Categories <input name="categories" id="event-categories" placeholder="Separate multiple categories with commas"></label>
+        <label class="wide">Organiser <input name="organiser" id="event-organiser" maxlength="180"></label>
+        <label class="wide">Description <textarea name="description" id="event-description" rows="4" maxlength="5000" placeholder="Event details for visitors"></textarea></label>
+        <label class="wide">Official event link <input name="source_url" id="event-source" type="url" placeholder="https://"></label>
+        <label class="wide">Registration link <input name="registration_url" id="event-registration" type="url" placeholder="https://"></label>
+        <label>Contact email <input name="contact_email" id="event-email" type="email"></label>
+        <label>Contact phone <input name="contact_phone" id="event-phone" type="tel"></label>
+        <label class="wide">Poster image URL <input name="poster_url" id="event-poster" type="url" placeholder="https://"></label>
+        <label>Status
+          <select name="status" id="event-status"><option value="confirmed">Confirmed</option><option value="postponed">Postponed</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
+        </label>
+        <label class="visibility-option"><input name="hidden" id="event-hidden" type="checkbox"> Hide from public calendar</label>
+      </div>
+      <p id="event-form-message" class="admin-message" role="status"></p>
+      <div class="dialog-actions">
+        <button class="button button-outline" id="cancel-dialog" type="button">Cancel</button>
+        <button class="button button-filled" id="save-event-button" type="submit"><span class="material-symbols-rounded">save</span> Save event</button>
+      </div>
+    </form>
+  </dialog>
+
+  <footer class="admin-footer"><span>India Racing Cycles · Private administration</span><a href="index.html">Return to public website</a></footer>
+</body>
+</html>
