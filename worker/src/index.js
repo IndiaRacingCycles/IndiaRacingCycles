@@ -7,7 +7,7 @@ function cors(request, env) {
   const allowOrigin = origin === allowed ? origin : allowed;
   return {
     "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type,Authorization",
     "Access-Control-Max-Age": "86400",
     "Vary": "Origin"
@@ -195,6 +195,54 @@ function isAdmin(request, env) {
   return Boolean(env.ADMIN_API_TOKEN) &&
     request.headers.get("Authorization") === "Bearer " + env.ADMIN_API_TOKEN;
 }
+
+function makeEvent(body, forcedId) {
+  const title = cleanText(body.title || body.event_name, 180);
+  const startDate = cleanText(body.start_date || body.event_date, 10);
+  const endDate = cleanText(body.end_date || body.event_date_end || startDate, 10);
+  if (!title) return { error: "Event name is required." };
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(startDate)) return { error: "A valid event start date is required before publishing." };
+  if (endDate && !/^\\d{4}-\\d{2}-\\d{2}$/.test(endDate)) return { error: "Please enter a valid event end date." };
+  if (endDate && endDate < startDate) return { error: "The event end date cannot be before its start date." };
+
+  const sourceUrl = publicUrl(body.source_url);
+  const registrationUrl = publicUrl(body.registration_url);
+  const posterUrl = publicUrl(body.poster_url);
+  if (sourceUrl === null || registrationUrl === null || posterUrl === null) {
+    return { error: "Event, registration and poster links must be public http:// or https:// URLs." };
+  }
+  const slug = title.toLowerCase().normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 56) || "cycling-event";
+  const id = cleanText(forcedId || body.id, 100) || (slug + "-" + crypto.randomUUID().slice(0, 8));
+  const discipline = cleanText(body.discipline || body.category, 80);
+  const rawCategories = Array.isArray(body.categories) ? body.categories : cleanText(body.categories, 500).split(",");
+  const categories = [...new Set(rawCategories.map(value => cleanText(value, 80)).filter(Boolean))];
+  if (discipline && !categories.includes(discipline)) categories.unshift(discipline);
+  const status = ["confirmed", "postponed", "cancelled", "completed"].includes(body.status) ? body.status : "confirmed";
+  const event = {
+    id,
+    title,
+    start_date: startDate,
+    end_date: endDate,
+    location: cleanText(body.location, 220),
+    state: cleanText(body.state, 100),
+    discipline,
+    categories,
+    organiser: cleanText(body.organiser, 180),
+    description: cleanText(body.description || body.details, 5000),
+    registration_url: registrationUrl,
+    contact_email: cleanText(body.contact_email || body.organiser_email, 254).toLowerCase(),
+    contact_phone: cleanText(body.contact_phone || body.organiser_phone, 50),
+    poster_url: posterUrl,
+    source_url: sourceUrl,
+    source_links: Array.isArray(body.source_links) ? body.source_links.slice(0, 10) : [],
+    status,
+    verified_at: cleanText(body.verified_at, 10) || nowIso().slice(0, 10),
+    confidence: cleanText(body.confidence, 60) || "admin-reviewed",
+    hidden: Boolean(body.hidden)
+  };
+  return { event };
+}
 async function handleAdminSuggestions(request, url, env) {
   if (!isAdmin(request, env)) return json({ error: "Unauthorized." }, 401);
   if (request.method === "GET" && url.pathname === "/api/admin/event-suggestions") {
@@ -213,8 +261,32 @@ async function handleAdminSuggestions(request, url, env) {
       }))
     });
   }
+
+  const approveMatch = url.pathname.match(/^\\/api\\/admin\\/event-suggestions\\/([a-f0-9-]{36})\\/approve$/i);
+  if (request.method === "POST" && approveMatch) {
+    const suggestionId = approveMatch[1];
+    const row = await env.DB.prepare("SELECT * FROM event_suggestions WHERE id=?").bind(suggestionId).first();
+    if (!row) return json({ error: "Suggestion not found." }, 404);
+    if (row.status === "added") return json({ error: "This suggestion has already been added to the calendar." }, 409);
+    const suggestion = JSON.parse(row.payload_json);
+    const body = await request.json().catch(() => ({}));
+    const parsed = makeEvent({ ...suggestion, ...body, confidence: "community-submitted" });
+    if (parsed.error) return json({ error: parsed.error }, 400);
+    const event = parsed.event;
+    const stamp = nowIso();
+    const saveEvent = env.DB.prepare(
+      "INSERT INTO events (id,title,start_date,end_date,status,payload_json,updated_at) VALUES (?,?,?,?,?,?,?) " +
+      "ON CONFLICT(id) DO UPDATE SET title=excluded.title,start_date=excluded.start_date,end_date=excluded.end_date,status=excluded.status,payload_json=excluded.payload_json,updated_at=excluded.updated_at"
+    ).bind(event.id, event.title, event.start_date, event.end_date, event.status, JSON.stringify(event), stamp);
+    const markSuggestion = env.DB.prepare(
+      "UPDATE event_suggestions SET status='added',updated_at=?,review_note=? WHERE id=?"
+    ).bind(stamp, "Approved and published as event " + event.id, suggestionId);
+    await env.DB.batch([saveEvent, markSuggestion]);
+    return json({ ok: true, status: "added", event }, 201);
+  }
+
   if (request.method === "PATCH") {
-    const match = url.pathname.match(/^\/api\/admin\/event-suggestions\/([a-f0-9-]{36})$/i);
+    const match = url.pathname.match(/^\\/api\\/admin\\/event-suggestions\\/([a-f0-9-]{36})$/i);
     if (!match) return json({ error: "Invalid suggestion ID." }, 400);
     const body = await request.json().catch(() => ({}));
     const status = cleanText(body.status, 20);
@@ -227,6 +299,27 @@ async function handleAdminSuggestions(request, url, env) {
     ).bind(status, nowIso(), note, match[1]).run();
     if (!result.meta?.changes) return json({ error: "Suggestion not found." }, 404);
     return json({ ok: true, id: match[1], status });
+  }
+  return json({ error: "Method not allowed." }, 405);
+}
+async function handleAdminEvents(request, url, env) {
+  if (!isAdmin(request, env)) return json({ error: "Unauthorized." }, 401);
+  if (request.method === "GET" && url.pathname === "/api/admin/events") {
+    const rows = await env.DB.prepare("SELECT * FROM events ORDER BY start_date,id").all();
+    return json({ events: (rows.results || []).map(row => JSON.parse(row.payload_json)) });
+  }
+  if (request.method === "POST" && url.pathname === "/api/admin/events") {
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") return json({ error: "Please send the event details again." }, 400);
+    const parsed = makeEvent(body);
+    if (parsed.error) return json({ error: parsed.error }, 400);
+    const event = parsed.event;
+    const stamp = nowIso();
+    await env.DB.prepare(
+      "INSERT INTO events (id,title,start_date,end_date,status,payload_json,updated_at) VALUES (?,?,?,?,?,?,?) " +
+      "ON CONFLICT(id) DO UPDATE SET title=excluded.title,start_date=excluded.start_date,end_date=excluded.end_date,status=excluded.status,payload_json=excluded.payload_json,updated_at=excluded.updated_at"
+    ).bind(event.id, event.title, event.start_date, event.end_date, event.status, JSON.stringify(event), stamp).run();
+    return json({ ok: true, event }, 201);
   }
   return json({ error: "Method not allowed." }, 405);
 }
@@ -275,6 +368,10 @@ async function handle(request, env) {
   if (url.pathname === "/api/admin/event-suggestions" || url.pathname.startsWith("/api/admin/event-suggestions/")) {
     try { return await handleAdminSuggestions(request, url, env); }
     catch (e) { console.error("Admin suggestion operation failed:", e); return json({ error: "Could not process the review request." }, 502); }
+  }
+  if (url.pathname === "/api/admin/events") {
+    try { return await handleAdminEvents(request, url, env); }
+    catch (e) { console.error("Admin event operation failed:", e); return json({ error: "Could not process the event request." }, 502); }
   }
   if (url.pathname === "/api/subscribe" && request.method === "POST") {
     try { return await handleSubscribe(request, env); }
