@@ -7,8 +7,31 @@
   const safeUrl = (value) => { try { const u = new URL(String(value || ""), window.location.href); return ["https:","http:","mailto:"].includes(u.protocol) ? safe(u.href) : "#"; } catch { return "#"; } };
   const base = (window.IRC_CONFIG && window.IRC_CONFIG.apiBase || "").replace(/\/$/,"");
   async function load(kind) {
-    if (base) { try { const r=await fetch(base+"/api/"+kind,{headers:{Accept:"application/json"}}); if(r.ok) { const value=await r.json(); if (!Array.isArray(value[kind]) || value[kind].length) return value; } } catch(e) { console.warn("API unavailable; using published snapshot.",e); } }
-    const r=await fetch("data/"+kind+".json",{cache:"no-store"}); if(!r.ok) throw new Error("Could not load "+kind); return await r.json();
+    // Read the published snapshot first, then overlay any admin-managed D1 records.
+    const snapshotResponse = await fetch("data/"+kind+".json",{cache:"no-store"});
+    if(!snapshotResponse.ok) throw new Error("Could not load "+kind);
+    const snapshot = await snapshotResponse.json();
+    if (base) {
+      try {
+        const response = await fetch(base+"/api/"+kind,{headers:{Accept:"application/json"}});
+        if (response.ok) {
+          const live = await response.json();
+          if (kind === "events" && Array.isArray(live.events)) {
+            const merged = new Map((snapshot.events || []).map(event => [event.id,event]));
+            live.events.forEach(event => {
+              if (!event || !event.id) return;
+              if (event.hidden) merged.delete(event.id);
+              else merged.set(event.id,event);
+            });
+            return {...snapshot,events:[...merged.values()]};
+          }
+          if (Array.isArray(live[kind]) && live[kind].length) return live;
+        }
+      } catch(error) {
+        console.warn("API unavailable; using published snapshot.",error);
+      }
+    }
+    return snapshot;
   }
   function dateRange(e){ if(!e.end_date) return "Starts "+fmt(e.start_date); return e.start_date===e.end_date ? fmt(e.start_date) : fmt(e.start_date)+" – "+fmt(e.end_date); }
   function links(e){
