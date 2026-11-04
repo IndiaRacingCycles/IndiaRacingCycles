@@ -61,46 +61,39 @@ async function handleSubscribe(request, env) {
   if (body.website) return json({ ok: true });
   const email = String(body.email || "").trim().toLowerCase();
   if (!validEmail(email)) return json({ error: "Please enter a valid email address." }, 400);
+  if (body.consent !== true) return json({ error: "Please agree to receive India Racing Cycles updates." }, 400);
 
   const existing = await env.DB.prepare("SELECT status FROM subscribers WHERE email = ?").bind(email).first();
   if (existing?.status === "active") {
-    return json({ ok: true, message: "This address is already subscribed." });
+    return json({ ok: true, status: "active", message: "This email address is already on the updates list." });
+  }
+  if (existing?.status === "pending") {
+    return json({ ok: true, status: "pending", message: "Your email address is already saved on the updates list. Email delivery is not available yet." });
   }
 
-  // Versioned purpose gives newsletter signups a fresh IP counter after a limit change.
-  if (!await limitSignup(request, env, "newsletter-signup-v2", 50)) {
+  // Collection-only mode: save the address as pending. No confirmation email is sent.
+  // A versioned rate-limit key gives this mode a fresh signup counter.
+  if (!await limitSignup(request, env, "newsletter-signup-v3", 50)) {
     return json({ error: "Too many attempts. Please try again later." }, 429);
   }
 
-  // Allow one confirmation email per address per hour, but only after a send succeeds.
-  const emailKey = await sha256("email-confirmation:" + email);
-  const emailCutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const emailLimit = await env.DB.prepare("SELECT attempts, window_started_at FROM signup_attempts WHERE key_hash = ?").bind(emailKey).first();
-  if (emailLimit && emailLimit.window_started_at >= emailCutoff && emailLimit.attempts >= 1) {
-    return json({ ok: true, message: "A confirmation email was recently sent to this address. Please check your inbox." }, 202);
-  }
-
-  const confirmToken = randomToken();
-  const unsubscribeToken = randomToken();
-  const confirmHash = await sha256(confirmToken);
-  const unsubscribeHash = await sha256(unsubscribeToken);
   const created = nowIso();
   await env.DB.prepare(`INSERT INTO subscribers (email,status,confirm_token_hash,unsubscribe_token_hash,created_at)
-    VALUES (?, 'pending', ?, ?, ?)
+    VALUES (?, 'pending', NULL, NULL, ?)
     ON CONFLICT(email) DO UPDATE SET
-      status=CASE WHEN subscribers.status='active' THEN 'active' ELSE 'pending' END,
-      confirm_token_hash=CASE WHEN subscribers.status='active' THEN subscribers.confirm_token_hash ELSE excluded.confirm_token_hash END,
-      unsubscribe_token_hash=excluded.unsubscribe_token_hash,
-      created_at=CASE WHEN subscribers.status='active' THEN subscribers.created_at ELSE excluded.created_at END,
-      unsubscribed_at=NULL`).bind(email, confirmHash, unsubscribeHash, created).run();
+      status='pending',
+      confirm_token_hash=NULL,
+      unsubscribe_token_hash=NULL,
+      created_at=excluded.created_at,
+      confirmed_at=NULL,
+      unsubscribed_at=NULL`).bind(email, created).run();
 
-  const confirmUrl = `${env.WORKER_URL || new URL(request.url).origin}/api/confirm?token=${confirmToken}`;
-  const html = `<div style="font:16px/1.6 Arial,sans-serif;color:#202124"><h2>Confirm your India Racing Cycles subscription</h2><p>Click the link below to confirm that you want to receive cycling event announcements and important updates.</p><p><a href="${confirmUrl}">Confirm my subscription</a></p><p>If you did not request this, ignore this email. No subscription will be activated.</p></div>`;
-  await sendEmail(env, email, "Confirm your India Racing Cycles subscription", html, `Confirm your subscription: ${confirmUrl}\nIf you did not request this, ignore this email.`);
-  await env.DB.prepare("INSERT INTO signup_attempts (key_hash, attempts, window_started_at) VALUES (?, 1, ?) ON CONFLICT(key_hash) DO UPDATE SET attempts=1, window_started_at=excluded.window_started_at").bind(emailKey, nowIso()).run();
-  return json({ ok: true, message: "Confirmation email sent. Your subscription is pending until confirmed." }, 202);
-}
-async function handleConfirm(url, env) {
+  return json({
+    ok: true,
+    status: "pending",
+    message: "Thanks! Your email address has been saved to the India Racing Cycles updates list. Email delivery is not available yet, so you will not receive confirmation emails or newsletters for now."
+  }, 202);
+}async function handleConfirm(url, env) {
   const token = url.searchParams.get("token") || "";
   if (!token || token.length > 128) return htmlPage("Invalid link", "This confirmation link is not valid. Please sign up again.");
   const hash = await sha256(token);
@@ -347,6 +340,21 @@ async function handleAdminEvents(request, url, env) {
   return json({ error: "Method not allowed." }, 405);
 }
 
+async function handleAdminSubscribers(request, url, env) {
+  if (!isAdmin(request, env)) return json({ error: "Unauthorized." }, 401);
+  if (request.method !== "GET" || url.pathname !== "/api/admin/subscribers") {
+    return json({ error: "Method not allowed." }, 405);
+  }
+  const status = cleanText(url.searchParams.get("status") || "all", 20);
+  if (!["all", "pending", "active", "unsubscribed"].includes(status)) {
+    return json({ error: "Unknown subscriber status filter." }, 400);
+  }
+  const result = status === "all"
+    ? await env.DB.prepare("SELECT email,status,created_at,confirmed_at,unsubscribed_at FROM subscribers ORDER BY created_at DESC LIMIT 1000").all()
+    : await env.DB.prepare("SELECT email,status,created_at,confirmed_at,unsubscribed_at FROM subscribers WHERE status=? ORDER BY created_at DESC LIMIT 1000").bind(status).all();
+  return json({ subscribers: result.results || [] });
+}
+
 async function handleNewsletter(request, env) {
   if (!env.ADMIN_API_TOKEN || request.headers.get("Authorization") !== `Bearer ${env.ADMIN_API_TOKEN}`) return json({ error: "Unauthorized." }, 401);
   const body = await request.json().catch(() => ({}));
@@ -410,6 +418,13 @@ async function handle(request, env) {
   if (url.pathname === "/api/unsubscribe" && request.method === "GET") {
     try { return await handleUnsubscribe(url, env); }
     catch (e) { return htmlPage("Unsubscribe unavailable", "Please try again later."); }
+  }
+  if (url.pathname === "/api/admin/subscribers" && request.method === "GET") {
+    try { return await handleAdminSubscribers(request, url, env); }
+    catch (e) {
+      console.error("Admin subscriber list failed:", e);
+      return json({ error: "Could not load subscribers." }, 502);
+    }
   }
   if (url.pathname === "/api/admin/newsletter" && request.method === "POST") {
     try { return await handleNewsletter(request, env); }
