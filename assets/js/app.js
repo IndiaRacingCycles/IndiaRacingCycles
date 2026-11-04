@@ -141,6 +141,36 @@
     });
   }
   function newsletter(){
-    const form=$("newsletter-form");if(!form)return;form.addEventListener("submit",async ev=>{ev.preventDefault();const msg=$("newsletter-message"),email=$("newsletter-email").value.trim();if(!base){msg.textContent="Newsletter sign-up is not connected yet. The email service needs to be configured before subscriptions can be accepted.";msg.className="form-message error";return;}msg.textContent="Sending confirmation…";msg.className="form-message";try{const r=await fetch(base+"/api/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email})});const data=await r.json();if(!r.ok)throw new Error(data.error||"Could not subscribe");msg.textContent="Check your inbox for a confirmation link. Your subscription is not active until you confirm.";msg.className="form-message success";form.reset();}catch(err){msg.textContent=err.message;msg.className="form-message error";}});}
+    const form=$("newsletter-form");
+    if(!form)return;
+    form.addEventListener("submit",async ev=>{
+      ev.preventDefault();
+      const msg=$("newsletter-message");
+      const email=$("newsletter-email").value.trim();
+      const consent=$("newsletter-consent");
+      if(!base){
+        msg.textContent="Newsletter sign-up is temporarily unavailable. Please try again later.";
+        msg.className="form-message error";
+        return;
+      }
+      msg.textContent="Saving your email address…";
+      msg.className="form-message";
+      try{
+        const r=await fetch(base+"/api/subscribe",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({email,consent:consent.checked})
+        });
+        const data=await r.json();
+        if(!r.ok)throw new Error(data.error||"Could not save your email address.");
+        msg.textContent=data.message||"Your email address has been saved to the India Racing Cycles updates list. Email delivery is not available yet.";
+        msg.className="form-message success";
+        form.reset();
+      }catch(err){
+        msg.textContent=err.message;
+        msg.className="form-message error";
+      }
+    });
+  }
   setTheme();newsletter();const page=document.body.dataset.page;if(page==="upcoming")initUpcoming();if(page==="past")initPast();if(page==="news")initNews();if(page==="suggestion")suggestionForm();
 })();
