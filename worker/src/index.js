@@ -43,7 +43,7 @@ async function sendEmail(env, to, subject, html, textBody) {
   }
   return response.json();
 }
-async function limitSignup(request, env, purpose = "signup", maxAttempts = 20) {
+async function limitSignup(request, env, purpose = "signup", maxAttempts = 50) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const key = await sha256(purpose + ":" + ip);
   const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -61,6 +61,17 @@ async function handleSubscribe(request, env) {
   if (body.website) return json({ ok: true });
   const email = String(body.email || "").trim().toLowerCase();
   if (!validEmail(email)) return json({ error: "Please enter a valid email address." }, 400);
+
+  // Prevent repeated confirmation emails to the same address within one hour.
+  const existing = await env.DB.prepare("SELECT status, created_at FROM subscribers WHERE email = ?").bind(email).first();
+  if (existing?.status === "active") {
+    return json({ ok: true, message: "This address is already subscribed." });
+  }
+  const emailWindow = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  if (existing?.status === "pending" && existing.created_at >= emailWindow) {
+    return json({ ok: true, message: "A subscription request for this address was recently received. Please check your inbox or try again in an hour." }, 202);
+  }
+
   if (!await limitSignup(request, env)) return json({ error: "Too many attempts. Please try again later." }, 429);
 
   const confirmToken = randomToken();
@@ -77,8 +88,6 @@ async function handleSubscribe(request, env) {
       created_at=CASE WHEN subscribers.status='active' THEN subscribers.created_at ELSE excluded.created_at END,
       unsubscribed_at=NULL`).bind(email, confirmHash, unsubscribeHash, created).run();
 
-  const row = await env.DB.prepare("SELECT status FROM subscribers WHERE email = ?").bind(email).first();
-  if (row?.status === "active") return json({ ok: true, message: "This address is already subscribed." });
   const confirmUrl = `${env.WORKER_URL || new URL(request.url).origin}/api/confirm?token=${confirmToken}`;
   const html = `<div style="font:16px/1.6 Arial,sans-serif;color:#202124"><h2>Confirm your India Racing Cycles subscription</h2><p>Click the link below to confirm that you want to receive cycling event announcements and important updates.</p><p><a href="${confirmUrl}">Confirm my subscription</a></p><p>If you did not request this, ignore this email. No subscription will be activated.</p></div>`;
   await sendEmail(env, email, "Confirm your India Racing Cycles subscription", html, `Confirm your subscription: ${confirmUrl}\nIf you did not request this, ignore this email.`);
