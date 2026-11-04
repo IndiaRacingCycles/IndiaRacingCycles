@@ -43,7 +43,7 @@ async function sendEmail(env, to, subject, html, textBody) {
   }
   return response.json();
 }
-async function limitSignup(request, env, purpose = "signup") {
+async function limitSignup(request, env, purpose = "signup", maxAttempts = 20) {
   const ip = request.headers.get("CF-Connecting-IP") || "unknown";
   const key = await sha256(purpose + ":" + ip);
   const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -52,7 +52,7 @@ async function limitSignup(request, env, purpose = "signup") {
     await env.DB.prepare("INSERT INTO signup_attempts (key_hash, attempts, window_started_at) VALUES (?, 1, ?) ON CONFLICT(key_hash) DO UPDATE SET attempts=1, window_started_at=excluded.window_started_at").bind(key, nowIso()).run();
     return true;
   }
-  if (row.attempts >= 5) return false;
+  if (row.attempts >= maxAttempts) return false;
   await env.DB.prepare("UPDATE signup_attempts SET attempts = attempts + 1 WHERE key_hash = ?").bind(key).run();
   return true;
 }
@@ -127,7 +127,7 @@ async function handleEventSuggestion(request, env) {
   if (!body || typeof body !== "object") return json({ error: "Please send the event information again." }, 400);
   // Honeypot: bots receive a generic success response; no data is stored.
   if (body.website) return json({ ok: true }, 202);
-  if (!await limitSignup(request, env, "event-suggestion")) {
+  if (!await limitSignup(request, env, "event-suggestion", 5)) {
     return json({ error: "Too many submissions from this connection. Please try again later." }, 429);
   }
 
