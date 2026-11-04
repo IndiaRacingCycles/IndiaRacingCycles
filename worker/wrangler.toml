@@ -10,4 +10,4 @@ database_id = "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID"
 
 [vars]
 # Set this to the exact GitHub Pages origin, not a wildcard.
-SITE_URL = "https://learndhairyash.github.io"
+SITE_URL = "https://indiaracingcycles.github.io"
