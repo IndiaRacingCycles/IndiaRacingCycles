@@ -15,6 +15,7 @@ Pages:
 - `past.html` — searchable event archive
 - `news.html` — cycling news and announcements
 - `suggest-event.html` — public community form for sending event tips for manual review
+- `admin.html` — private token-protected dashboard for reviewing suggestions and managing calendar events
 
 The site uses plain HTML, CSS and JavaScript. No build step or frontend framework is required. The event calendar is rendered as one list, sorted by start date with the nearest event first. The Where We Look directory is a single-column list of cycling sources and public social-platform entry points. Event and news cards are loaded from `data/events.json` and `data/news.json`. The browser can optionally use a Cloudflare Worker API by setting `window.IRC_CONFIG.apiBase` in the page HTML.
 
@@ -41,16 +42,15 @@ Two past-event entries are clearly labelled as transcribed from the community-ad
 
 The fourth page, suggest-event.html, lets visitors send any information they have: an event name, public Facebook/Instagram/LinkedIn/BookMyShow or organiser link, source platform, start/end dates, city, cycling category, organiser, organiser mobile/email, poster/image URL, free-text notes and optional contributor contact details. Most fields are optional; at least one useful event clue is required.
 
-Suggestions are saved as pending in the Cloudflare D1 event_suggestions table. They are NOT published automatically. The administrator checks the source and manually adds approved events to data/events.json. The form is deliberately transparent when its backend is not connected: it will not claim that a suggestion was sent when no server URL has been configured.
+Suggestions are saved as pending in the Cloudflare D1 event_suggestions table. They are NOT published automatically. The administrator signs in at `admin.html` using `ADMIN_API_TOKEN`, checks the source, then approves a suggestion into the Cloudflare events table or rejects it. The admin dashboard can also add, edit and hide calendar events. The public event list combines the published `data/events.json` snapshot with Cloudflare-managed records; Cloudflare records override matching event IDs, and hidden records remove matching events from the public list.
 
 Optional admin notification: set the Worker secret ADMIN_EMAIL to the address that should receive new suggestion notices. The Worker stores the suggestion first; an email notification failure does not delete the suggestion.
 
 Manual review:
-- List pending suggestions using GET /api/admin/event-suggestions with Authorization: Bearer ADMIN_API_TOKEN.
-- Update a suggestion using PATCH /api/admin/event-suggestions/{id} with JSON such as {"status":"reviewed","review_note":"Checked organiser page"}. Allowed statuses are reviewed, added and rejected.
-- Or inspect directly in D1 with Wrangler:
-  npx wrangler d1 execute india-racing-cycles --remote --command "SELECT id, created_at, payload_json FROM event_suggestions WHERE status='pending' ORDER BY created_at DESC;"
-- After checking a suggestion, manually update data/events.json and commit it. Update the suggestion status so the pending queue stays clear.
+- Open `https://indiaracingcycles.github.io/IndiaRacingCycles/admin.html` and enter the `ADMIN_API_TOKEN` Worker secret. The dashboard keeps the token in page memory only; it is not saved to local or session storage.
+- The dashboard lists pending/all suggestions, allows manual review and rejection, and approves a suggestion into the Cloudflare events table.
+- The Calendar tab can add, edit and hide/restore events. Edits are saved as Cloudflare D1 overrides, so the source `data/events.json` file remains unchanged.
+- Protected endpoints: GET `/api/admin/event-suggestions`, PATCH `/api/admin/event-suggestions/{id}`, POST `/api/admin/event-suggestions/{id}/approve`, GET `/api/admin/events`, and POST `/api/admin/events`.
 
 ## Daily collection automation
 
