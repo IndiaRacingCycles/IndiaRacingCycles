@@ -5,6 +5,7 @@
   let adminToken = "";
   let suggestions = [];
   let events = [];
+  let subscribers = [];
   let currentSuggestion = null;
 
   const escapeHtml = value => String(value ?? "").replace(/[&<>"']/g, ch => ({
@@ -72,11 +73,13 @@
         fetch("data/events.json",{cache:"no-store"}).then(r => {
           if (!r.ok) throw new Error("Could not read the published event snapshot.");
           return r.json();
-        })
+        }),
+        api("/api/admin/subscribers?status=all")
       ]);
       suggestions = results[0].suggestions || [];
       const overrides = results[1].events || [];
       const snapshot = results[2].events || [];
+      subscribers = results[3].subscribers || [];
       const byId = new Map(snapshot.map(event => [event.id,event]));
       overrides.forEach(event => {
         if (!event || !event.id) return;
@@ -94,9 +97,12 @@
     $("stat-pending").textContent = suggestions.filter(s => s.status === "pending").length;
     $("stat-events").textContent = events.filter(e => !e.hidden).length;
     $("stat-reviewed").textContent = suggestions.filter(s => s.status === "reviewed" || s.status === "added" || s.status === "rejected").length;
+    $("stat-subscribers").textContent = subscribers.length;
     $("tab-pending-count").textContent = suggestions.filter(s => s.status === "pending").length;
+    $("tab-subscriber-count").textContent = subscribers.length;
     renderSuggestions();
     renderCalendar();
+    renderSubscribers();
   }
   function detail(label, value, isUrl) {
     if (!value) return "";
@@ -154,14 +160,25 @@
     }).join("");
     $("calendar-empty").hidden = list.length > 0;
   }
+  function renderSubscribers() {
+    const filter = $("subscriber-filter").value;
+    const list = subscribers.filter(item => filter === "all" || item.status === filter);
+    $("subscriber-list").innerHTML = list.map(item => {
+      const status = ["pending","active","unsubscribed"].includes(item.status) ? item.status : "pending";
+      const label = status === "pending" ? "Waiting list" : (status === "active" ? "Previously confirmed" : "Unsubscribed");
+      const date = item.created_at ? new Date(item.created_at).toLocaleString("en-IN") : "Date not available";
+      return '<article class="subscriber-card"><div><strong>' + escapeHtml(item.email) + '</strong><small>Added ' + escapeHtml(date) + '</small></div><span class="status-chip ' + status + '">' + label + '</span></article>';
+    }).join("");
+    $("subscriber-empty").hidden = list.length > 0;
+  }
+
   function activateTab(tab) {
-    const suggestionsActive = tab === "suggestions";
-    $("suggestions-panel").hidden = !suggestionsActive;
-    $("calendar-panel").hidden = suggestionsActive;
-    $("tab-suggestions").classList.toggle("active",suggestionsActive);
-    $("tab-calendar").classList.toggle("active",!suggestionsActive);
-    $("tab-suggestions").setAttribute("aria-selected",String(suggestionsActive));
-    $("tab-calendar").setAttribute("aria-selected",String(!suggestionsActive));
+    ["suggestions","calendar","subscribers"].forEach(name => {
+      const active = tab === name;
+      $(name + "-panel").hidden = !active;
+      $("tab-" + name).classList.toggle("active",active);
+      $("tab-" + name).setAttribute("aria-selected",String(active));
+    });
   }
 
   function openEditor(event = {}, suggestion = null) {
@@ -267,6 +284,7 @@
     adminToken = "";
     suggestions = [];
     events = [];
+    subscribers = [];
     $("dashboard").hidden = true;
     $("login-panel").hidden = false;
     $("logout-button").hidden = true;
@@ -279,6 +297,8 @@
   $("show-hidden").addEventListener("change",renderCalendar);
   $("tab-suggestions").addEventListener("click",() => activateTab("suggestions"));
   $("tab-calendar").addEventListener("click",() => activateTab("calendar"));
+  $("tab-subscribers").addEventListener("click",() => activateTab("subscribers"));
+  $("subscriber-filter").addEventListener("change",renderSubscribers);
   $("add-event-button").addEventListener("click",() => openEditor());
   $("suggestion-list").addEventListener("click",async event => {
     const button = event.target.closest("button[data-action]");
